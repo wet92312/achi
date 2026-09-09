@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
@@ -6,7 +7,8 @@ from linebot.v3.messaging import (
     ApiClient,
     MessagingApi,
     ReplyMessageRequest,
-    TextMessage
+    TextMessage,
+    ImageMessage  # 1. 新增匯入 ImageMessage
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
@@ -31,31 +33,53 @@ def callback():
 
     return 'OK'
 
-# 關鍵字判斷邏輯
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     user_message = event.message.text.strip()
-    reply_text = None
-    
-    # 關鍵字比對（依照需求自行增減條件）
-    if user_message == "你好":
-        reply_text = "你好~我是阿財！很高興為您服務。"
-    elif "阿威" in user_message:
-        reply_text = "他是大帥哥"
-    elif user_message == "微風":
-        reply_text = "他是水煎包"
+    reply_messages = []  # 使用 list 存放要發送的訊息物件（最多一次傳 5 個）
 
-    # 沒講到關鍵字就不處理、不發送任何回覆
-    if not reply_text:
+    # 範例 1：純文字回應
+    if user_message == "你好":
+        reply_messages.append(TextMessage(text="你好我是阿財！很高興為您服務。"))
+
+    # 範例 4：純文字 + 超連結網址
+    elif user_message == "LCW":
+        reply_messages.append(
+            TextMessage(text="歡迎造訪我們的LCW官方網站：\nhttps://aweidesign.why3s.tw/lcwmade/index.html")
+        )
+
+    # 範例 2：單獨回應圖片
+    elif user_message == "菜單":
+        menu_img_url = "https://example.com/menu.jpg"  # 替換為你的公開圖片網址
+        reply_messages.append(
+            ImageMessage(
+                original_content_url=menu_img_url,  # 點開看的原圖
+                preview_image_url=menu_img_url       # 聊天室顯示的縮圖
+            )
+        )
+
+    # 範例 3：同時回應「文字 + 圖片」
+    elif user_message == "優惠":
+        promo_img_url = "https://example.com/promo.jpg"
+        reply_messages.append(TextMessage(text="這是我們本月最新的優惠活動："))
+        reply_messages.append(
+            ImageMessage(
+                original_content_url=promo_img_url,
+                preview_image_url=promo_img_url
+            )
+        )
+
+    # 沒命中任何關鍵字，直接 return 不回覆
+    if not reply_messages:
         return
 
-    # 有命中關鍵字才執行傳送訊息
+    # 發送訊息
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_text)]
+                messages=reply_messages
             )
         )
 
