@@ -37,15 +37,13 @@ def handle_message(event):
     user_message = event.message.text.strip()
     reply_text = None
     
-    # 關鍵字比對
+    # 關鍵字比對（依照需求自行增減條件）
     if user_message == "你好":
-        reply_text = "你好我是阿財！很高興為您服務。"
-    elif "營業時間" in user_message:
-        reply_text = "我們的營業時間為週一至週五 09:00 - 18:00。"
-    elif user_message == "位置":
-        reply_text = "我們部位於台北市信義區..."
-    else:
-        reply_text = f"收到您的訊息：「{user_message}」。目前尚未設定此關鍵字回應。"
+        reply_text = "你好~我是阿財！很高興為您服務。"
+    elif "阿威" in user_message:
+        reply_text = "他是大帥哥"
+    elif user_message == "微風":
+        reply_text = "他是水煎包"
 
     # 沒講到關鍵字就不處理、不發送任何回覆
     if not reply_text:
