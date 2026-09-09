@@ -38,7 +38,7 @@ def handle_message(event):
     
     # 關鍵字比對
     if user_message == "你好":
-        reply_text = "你好！很高興為您服務。"
+        reply_text = "你好我是阿財！很高興為您服務。"
     elif "營業時間" in user_message:
         reply_text = "我們的營業時間為週一至週五 09:00 - 18:00。"
     elif user_message == "位置":
