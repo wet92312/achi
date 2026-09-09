@@ -46,7 +46,11 @@ def handle_message(event):
     else:
         reply_text = f"收到您的訊息：「{user_message}」。目前尚未設定此關鍵字回應。"
 
-    # 回傳訊息
+    # 沒講到關鍵字就不處理、不發送任何回覆
+    if not reply_text:
+        return
+
+    # 有命中關鍵字才執行傳送訊息
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
