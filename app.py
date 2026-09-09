@@ -35,15 +35,16 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    user_message = event.message.text.strip()
-    reply_messages = []  # 使用 list 存放要發送的訊息物件（最多一次傳 5 個）
+    # .strip() 去除前後空格，.lower() 將英文一律轉為小寫
+    user_message = event.message.text.strip().lower()
+    reply_messages = []
 
     # 範例 1：純文字回應
     if user_message == "你好":
         reply_messages.append(TextMessage(text="你好我是阿財！很高興為您服務。"))
 
     # 範例 4：純文字 + 超連結網址
-    elif user_message == "LCW":
+    elif user_message == "lcw":
         reply_messages.append(
             TextMessage(text="歡迎造訪我們的LCW官方網站：\nhttps://aweidesign.why3s.tw/lcwmade/index.html")
         )
