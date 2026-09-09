@@ -35,6 +35,7 @@ def callback():
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     user_message = event.message.text.strip()
+    reply_text = None
     
     # 關鍵字比對
     if user_message == "你好":
