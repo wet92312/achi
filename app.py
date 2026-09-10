@@ -51,7 +51,8 @@ CITY_MAPPING = {
 }
 
 def get_weather_icon(wx_text):
-    """根據天氣狀況回傳 Emoji 圖示"""
+    if not wx_text:
+        return "🌤️"
     if "雷" in wx_text:
         return "🌩️"
     elif "雨" in wx_text:
@@ -65,17 +66,24 @@ def get_weather_icon(wx_text):
     return "🌤️"
 
 def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
-    """產出 Apple 天氣風格的 Flex Message 卡片"""
+    # 1. 防錯過濾：確保傳入的所有值均非 None
+    target_city = str(target_city or "未知縣市")
+    wx = str(wx or "未知")
+    min_t = str(min_t or "0")
+    max_t = str(max_t or "0")
+    pop = str(pop or "0")
+    ci = str(ci or "舒適")
+
     icon = get_weather_icon(wx)
     
-    # 確保降雨機率數值合法（0% ~ 100%）
+    # 2. 安全轉為整數
     try:
         pop_num = int(pop)
-    except ValueError:
+    except (ValueError, TypeError):
         pop_num = 0
-    pop_percent = f"{max(5, min(100, pop_num))}%"  # 最少保留 5% 寬度以利顯示
 
-    # 溫馨提示文字
+    pop_percent = f"{max(5, min(100, pop_num))}%"
+
     if pop_num >= 50:
         tip = "☔ 降雨機率偏高，出門記得帶把傘！"
     elif "晴" in wx:
@@ -87,7 +95,7 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
         "type": "bubble",
         "styles": {
             "body": {
-                "backgroundColor": "#1E293B"  # Apple 天氣經典深藍背景
+                "backgroundColor": "#1E293B"
             }
         },
         "body": {
@@ -96,7 +104,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
             "spacing": "md",
             "paddingAll": "20px",
             "contents": [
-                # 1. 城市名稱與時間
                 {
                     "type": "text",
                     "text": target_city,
@@ -110,7 +117,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
                     "size": "xs",
                     "color": "#94A3B8"
                 },
-                # 2. 天氣主要狀態與大 Icon
                 {
                     "type": "box",
                     "layout": "horizontal",
@@ -144,7 +150,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
                         }
                     ]
                 },
-                # 3. 高低溫標籤
                 {
                     "type": "box",
                     "layout": "horizontal",
@@ -167,13 +172,11 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
                         }
                     ]
                 },
-                # 4. 分隔線
                 {
                     "type": "separator",
                     "margin": "lg",
                     "color": "#334155"
                 },
-                # 5. 降雨機率與條狀進度條 (Progress Bar)
                 {
                     "type": "box",
                     "layout": "vertical",
@@ -200,7 +203,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
                                 }
                             ]
                         },
-                        # 進度條軌道 (Background Track)
                         {
                             "type": "box",
                             "layout": "vertical",
@@ -209,7 +211,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
                             "cornerRadius": "4px",
                             "margin": "xs",
                             "contents": [
-                                # 進度條填充 (Fill)
                                 {
                                     "type": "box",
                                     "layout": "vertical",
@@ -222,7 +223,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
                         }
                     ]
                 },
-                # 6. 底部貼心提示卡片
                 {
                     "type": "box",
                     "layout": "horizontal",
@@ -244,7 +244,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
         }
     }
     
-    # 將 Python dict 轉換為 FlexMessage 物件
     flex_container = FlexContainer.from_dict(flex_json)
     return FlexMessage(
         alt_text=f"{target_city}天氣預報",
@@ -252,7 +251,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
     )
 
 def get_taiwan_weather(city_input):
-    """呼叫氣象署 API，回傳 FlexMessage"""
     if not CWA_API_KEY:
         return TextMessage(text="系統未設定氣象 API 金鑰。")
 
@@ -277,18 +275,22 @@ def get_taiwan_weather(city_input):
             return TextMessage(text="查無該縣市氣象資料。")
 
         location_data = locations[0]
-        elements = {
-            item['elementName']: item['time'][0]['parameter']['parameterName'] 
-            for item in location_data.get('weatherElement', [])
-        }
         
-        wx = elements.get('Wx', '未知')
-        pop = elements.get('PoP', '0')
-        min_t = elements.get('MinT', '0')
-        max_t = elements.get('MaxT', '0')
-        ci = elements.get('CI', '')
+        # 安全解析氣象要素，防止 API 回傳 null 時滲透入字典
+        elements = {}
+        for item in location_data.get('weatherElement', []):
+            e_name = item.get('elementName')
+            time_list = item.get('time', [])
+            if time_list and 'parameter' in time_list[0]:
+                param_val = time_list[0]['parameter'].get('parameterName')
+                elements[e_name] = param_val if param_val is not None else ""
 
-        # 回傳產生好的 Flex Message
+        wx = elements.get('Wx') or '未知'
+        pop = elements.get('PoP') or '0'
+        min_t = elements.get('MinT') or '0'
+        max_t = elements.get('MaxT') or '0'
+        ci = elements.get('CI') or '舒適'
+
         return create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci)
 
     except Exception as e:
@@ -310,7 +312,6 @@ def handle_message(event):
     user_message = event.message.text.strip().lower()
     reply_messages = []
 
-    # 天氣查詢
     cleaned_msg = user_message.replace("天氣", "").replace("氣象", "").strip()
     weather_flex = get_taiwan_weather(cleaned_msg)
     
