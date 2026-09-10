@@ -46,24 +46,46 @@ CITY_MAPPING = {
 }
 
 def get_taiwan_weather(city_input):
-    """呼叫中央氣象署 API 取得預報"""
+    """呼叫中央氣象署 API 取得預報（修正中文網址編碼與詳細 Log）"""
     if not CWA_API_KEY:
+        print("❌ 錯誤: 未設定 CWA_API_KEY 環境變數")
         return "系統未設定氣象 API 金鑰。"
 
-    # 比對縣市名稱
+    # 1. 縣市名稱轉換
     target_city = CITY_MAPPING.get(city_input)
     if not target_city:
         return None
 
-    url = f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization={CWA_API_KEY}&locationName={target_city}"
+    # 2. API 請求網址與參數（使用 params 自動處理解析中文編碼）
+    url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001"
+    params = {
+        "Authorization": CWA_API_KEY.strip(),  # 自動去除前後空格
+        "locationName": target_city
+    }
     
     try:
-        res = requests.get(url, timeout=5)
-        data = res.json()
-        location_data = data['records']['location'][0]
+        res = requests.get(url, params=params, timeout=8)
+        print(f"DEBUG - API HTTP Status: {res.status_code}") # 印出 HTTP 狀態碼
         
-        # 解析氣象要素（天氣現象、降雨機率、高低溫、舒適度）
-        elements = {item['elementName']: item['time'][0]['parameter']['parameterName'] for item in location_data['weatherElement']}
+        if res.status_code != 200:
+            print(f"❌ API 請求失敗，狀態碼: {res.status_code}, 回覆: {res.text}")
+            return f"氣象 API 連線失敗 (HTTP {res.status_code})"
+
+        data = res.json()
+        
+        # 檢查是否有資料
+        locations = data.get('records', {}).get('location', [])
+        if not locations:
+            print("❌ 錯誤: 氣象署回傳資料中沒有找到地點")
+            return "查無該縣市氣象資料。"
+
+        location_data = locations[0]
+        
+        # 解析氣象要素
+        elements = {
+            item['elementName']: item['time'][0]['parameter']['parameterName'] 
+            for item in location_data.get('weatherElement', [])
+        }
         
         wx = elements.get('Wx', '未知')
         pop = elements.get('PoP', '0')
@@ -76,7 +98,9 @@ def get_taiwan_weather(city_input):
         msg += f"• 預估氣溫：{min_t}°C ~ {max_t}°C ({ci})\n"
         msg += f"• 降雨機率：{pop}%"
         return msg
+
     except Exception as e:
+        print(f"❌ Exception 錯誤詳細資訊: {e}") # 印出真正的錯誤訊息到 Render Logs
         return "無法取得氣象資料，請稍後再試。"
 
 @app.route("/callback", methods=['POST'])
