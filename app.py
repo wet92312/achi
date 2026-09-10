@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 import urllib3
 import traceback
@@ -50,6 +51,32 @@ CITY_MAPPING = {
     "金門": "金門縣", "金門縣": "金門縣",
     "馬祖": "連江縣", "連江": "連江縣"
 }
+
+# 選單關鍵字
+MENU_KEYWORDS_CJK = ["選單", "功能", "幫助", "指令", "阿財"]
+MENU_KEYWORDS_ASCII = ["help", "menu", "hello", "hi"]
+
+def find_city(text):
+    """Return the longest city name appearing anywhere in the message.
+
+    Longest wins so "新竹縣" is not swallowed by "新竹", and
+    "台北市" is not swallowed by "台北".
+    """
+    found = [name for name in CITY_MAPPING if name in text]
+    if not found:
+        return None
+    return max(found, key=len)
+
+def wants_menu(text):
+    """True if the message asks for the menu.
+
+    CJK keywords match anywhere. ASCII keywords need a word boundary so
+    "hi" does not fire on "this" and "menu" does not fire on "menus".
+    """
+    if any(word in text for word in MENU_KEYWORDS_CJK):
+        return True
+    words = re.findall(r"[a-z]+", text)
+    return any(word in words for word in MENU_KEYWORDS_ASCII)
 
 def get_weather_icon(wx_text):
     if not wx_text:
@@ -454,16 +481,15 @@ def handle_message(event):
     user_message = event.message.text.strip().lower()
     reply_messages = []
 
-    menu_keywords = ["選單", "功能", "幫助", "help", "menu", "指令", "阿財", "hello", "hi"]
-
-    if user_message in menu_keywords:
-        reply_messages.append(create_ah_tsai_menu_flex())
-    else:
-        cleaned_msg = user_message.replace("天氣", "").replace("氣象", "").strip()
-        weather_flex = get_taiwan_weather(cleaned_msg)
-        
+    # A city named anywhere in the message wins, so "阿財 台北天氣怎樣" asks for
+    # weather rather than the menu.
+    city = find_city(user_message)
+    if city:
+        weather_flex = get_taiwan_weather(city)
         if weather_flex:
             reply_messages.append(weather_flex)
+    elif wants_menu(user_message):
+        reply_messages.append(create_ah_tsai_menu_flex())
 
     if not reply_messages:
         return
