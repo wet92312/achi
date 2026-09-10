@@ -104,12 +104,22 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
             "spacing": "md",
             "paddingAll": "lg",
             "contents": [
+                # 📢 最前面加入：阿財播報員開場白
+                {
+                    "type": "text",
+                    "text": "🎙️ 我是阿財，現在為您播報氣象～",
+                    "size": "xs",
+                    "color": "#38BDF8",
+                    "weight": "bold"
+                },
+                # 城市名稱
                 {
                     "type": "text",
                     "text": target_city,
                     "weight": "bold",
                     "size": "xl",
-                    "color": "#FFFFFF"
+                    "color": "#FFFFFF",
+                    "margin": "xs"
                 },
                 {
                     "type": "text",
@@ -218,7 +228,7 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
                                     "height": "8px",
                                     "width": pop_percent,
                                     "cornerRadius": "4px",
-                                    "contents": []  # 修正重點：必須加上空的 contents 陣列
+                                    "contents": []
                                 }
                             ]
                         }
@@ -247,7 +257,7 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
     
     flex_container = FlexContainer.from_dict(flex_json)
     return FlexMessage(
-        alt_text=f"{target_city}天氣預報",
+        alt_text=f"我是阿財~{target_city}天氣預報",
         contents=flex_container
     )
 
