@@ -1,9 +1,6 @@
 import os
 import requests
-import urllib3  # 新增：用於關閉 SSL 警告
-
-# 關閉 urllib3 產生的 SSL 警告訊息（讓 Render Logs 保持乾淨）
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+import urllib3
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
@@ -12,20 +9,24 @@ from linebot.v3.messaging import (
     ApiClient,
     MessagingApi,
     ReplyMessageRequest,
-    TextMessage
+    TextMessage,
+    FlexMessage,
+    FlexContainer
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
+
+# 關閉 SSL 警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 
 CHANNEL_ACCESS_TOKEN = os.environ.get('CHANNEL_ACCESS_TOKEN')
 CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET')
-CWA_API_KEY = os.environ.get('CWA_API_KEY')  # 氣象署 API Key
+CWA_API_KEY = os.environ.get('CWA_API_KEY')
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-# 台灣縣市名稱常用對照表
 CITY_MAPPING = {
     "台北": "臺北市", "臺北": "臺北市", "台北市": "臺北市", "臺北市": "臺北市",
     "新北": "新北市", "新北市": "新北市",
@@ -49,11 +50,211 @@ CITY_MAPPING = {
     "馬祖": "連江縣", "連江": "連江縣"
 }
 
+def get_weather_icon(wx_text):
+    """根據天氣狀況回傳 Emoji 圖示"""
+    if "雷" in wx_text:
+        return "🌩️"
+    elif "雨" in wx_text:
+        return "🌧️"
+    elif "陰" in wx_text:
+        return "☁️"
+    elif "多雲" in wx_text:
+        return "⛅"
+    elif "晴" in wx_text:
+        return "☀️"
+    return "🌤️"
+
+def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
+    """產出 Apple 天氣風格的 Flex Message 卡片"""
+    icon = get_weather_icon(wx)
+    
+    # 確保降雨機率數值合法（0% ~ 100%）
+    try:
+        pop_num = int(pop)
+    except ValueError:
+        pop_num = 0
+    pop_percent = f"{max(5, min(100, pop_num))}%"  # 最少保留 5% 寬度以利顯示
+
+    # 溫馨提示文字
+    if pop_num >= 50:
+        tip = "☔ 降雨機率偏高，出門記得帶把傘！"
+    elif "晴" in wx:
+        tip = "🕶️ 晴朗好天氣，適合安排戶外活動！"
+    else:
+        tip = f"💡 目前體感{ci}，外出建議穿著適當衣物。"
+
+    flex_json = {
+        "type": "bubble",
+        "styles": {
+            "body": {
+                "backgroundColor": "#1E293B"  # Apple 天氣經典深藍背景
+            }
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
+            "paddingAll": "20px",
+            "contents": [
+                # 1. 城市名稱與時間
+                {
+                    "type": "text",
+                    "text": target_city,
+                    "weight": "bold",
+                    "size": "xl",
+                    "color": "#FFFFFF"
+                },
+                {
+                    "type": "text",
+                    "text": "未來 12 小時天氣預報",
+                    "size": "xs",
+                    "color": "#94A3B8"
+                },
+                # 2. 天氣主要狀態與大 Icon
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "margin": "lg",
+                    "contents": [
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": f"{max_t}°C",
+                                    "size": "3xl",
+                                    "weight": "bold",
+                                    "color": "#FFFFFF"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": f"{wx} · {ci}",
+                                    "size": "sm",
+                                    "color": "#CBD5E1",
+                                    "margin": "sm"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "text",
+                            "text": icon,
+                            "size": "3xl",
+                            "align": "end"
+                        }
+                    ]
+                },
+                # 3. 高低溫標籤
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "margin": "md",
+                    "spacing": "md",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": f"▲ 最高 {max_t}°",
+                            "size": "xs",
+                            "color": "#F87171",
+                            "weight": "bold"
+                        },
+                        {
+                            "type": "text",
+                            "text": f"▼ 最低 {min_t}°",
+                            "size": "xs",
+                            "color": "#60A5FA",
+                            "weight": "bold"
+                        }
+                    ]
+                },
+                # 4. 分隔線
+                {
+                    "type": "separator",
+                    "margin": "lg",
+                    "color": "#334155"
+                },
+                # 5. 降雨機率與條狀進度條 (Progress Bar)
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "margin": "lg",
+                    "spacing": "xs",
+                    "contents": [
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "☔ 降雨機率",
+                                    "size": "xs",
+                                    "color": "#94A3B8"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": f"{pop}%",
+                                    "size": "xs",
+                                    "color": "#38BDF8",
+                                    "align": "end",
+                                    "weight": "bold"
+                                }
+                            ]
+                        },
+                        # 進度條軌道 (Background Track)
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "backgroundColor": "#334155",
+                            "height": "8px",
+                            "cornerRadius": "4px",
+                            "margin": "xs",
+                            "contents": [
+                                # 進度條填充 (Fill)
+                                {
+                                    "type": "box",
+                                    "layout": "vertical",
+                                    "backgroundColor": "#38BDF8",
+                                    "height": "8px",
+                                    "width": pop_percent,
+                                    "cornerRadius": "4px"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                # 6. 底部貼心提示卡片
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "margin": "lg",
+                    "backgroundColor": "#0F172A",
+                    "cornerRadius": "md",
+                    "paddingAll": "md",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": tip,
+                            "size": "xs",
+                            "color": "#38BDF8",
+                            "wrap": True
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    
+    # 將 Python dict 轉換為 FlexMessage 物件
+    flex_container = FlexContainer.from_dict(flex_json)
+    return FlexMessage(
+        alt_text=f"{target_city}天氣預報",
+        contents=flex_container
+    )
+
 def get_taiwan_weather(city_input):
-    """呼叫中央氣象署 API 取得預報（新增 verify=False 忽略 SSL 驗證）"""
+    """呼叫氣象署 API，回傳 FlexMessage"""
     if not CWA_API_KEY:
-        print("❌ 錯誤: 未設定 CWA_API_KEY 環境變數")
-        return "系統未設定氣象 API 金鑰。"
+        return TextMessage(text="系統未設定氣象 API 金鑰。")
 
     target_city = CITY_MAPPING.get(city_input)
     if not target_city:
@@ -66,17 +267,14 @@ def get_taiwan_weather(city_input):
     }
     
     try:
-        # 🔥 在此處加入 verify=False 繞過憑證問題
         res = requests.get(url, params=params, timeout=8, verify=False)
-        
         if res.status_code != 200:
-            print(f"❌ API 請求失敗，狀態碼: {res.status_code}, 回覆: {res.text}")
-            return f"氣象 API 連線失敗 (HTTP {res.status_code})"
+            return TextMessage(text=f"氣象 API 連線失敗 (HTTP {res.status_code})")
 
         data = res.json()
         locations = data.get('records', {}).get('location', [])
         if not locations:
-            return "查無該縣市氣象資料。"
+            return TextMessage(text="查無該縣市氣象資料。")
 
         location_data = locations[0]
         elements = {
@@ -86,20 +284,16 @@ def get_taiwan_weather(city_input):
         
         wx = elements.get('Wx', '未知')
         pop = elements.get('PoP', '0')
-        min_t = elements.get('MinT', '')
-        max_t = elements.get('MaxT', '')
+        min_t = elements.get('MinT', '0')
+        max_t = elements.get('MaxT', '0')
         ci = elements.get('CI', '')
 
-        msg = f"【我是阿財!為您播報未來12小時氣象預報】\n"
-        msg = f"🌤️【{target_city} 天氣】\n"
-        msg += f"• 天氣狀況：{wx}\n"
-        msg += f"• 預估氣溫：{min_t}°C ~ {max_t}°C ({ci})\n"
-        msg += f"• 降雨機率：{pop}%"
-        return msg
+        # 回傳產生好的 Flex Message
+        return create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci)
 
     except Exception as e:
-        print(f"❌ Exception 錯誤詳細資訊: {e}")
-        return "無法取得氣象資料，請稍後再試。"
+        print(f"❌ Exception: {e}")
+        return TextMessage(text="無法取得氣象資料，請稍後再試。")
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -114,20 +308,18 @@ def callback():
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     user_message = event.message.text.strip().lower()
-    reply_text = None
+    reply_messages = []
 
-    # 1. 判斷是否為天氣查詢（例如輸入：台北天氣、天氣 台北、高雄天氣）
+    # 天氣查詢
     cleaned_msg = user_message.replace("天氣", "").replace("氣象", "").strip()
-    weather_result = get_taiwan_weather(cleaned_msg)
+    weather_flex = get_taiwan_weather(cleaned_msg)
     
-    if weather_result:
-        reply_text = weather_result
-    # 2. 一般關鍵字判斷
+    if weather_flex:
+        reply_messages.append(weather_flex)
     elif user_message == "hello":
-        reply_text = "你好！發送縣市名稱（如：台北天氣）可查詢最新氣象喔！"
+        reply_messages.append(TextMessage(text="你好！請輸入縣市名稱（例如：台北天氣、高雄天氣）即可獲得極簡風氣象卡片喔！"))
 
-    # 沒命中關鍵字或無氣象資料時不回覆
-    if not reply_text:
+    if not reply_messages:
         return
 
     with ApiClient(configuration) as api_client:
@@ -135,7 +327,7 @@ def handle_message(event):
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_text)]
+                messages=reply_messages
             )
         )
 
