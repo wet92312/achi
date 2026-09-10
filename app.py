@@ -89,8 +89,9 @@ def get_taiwan_weather(city_input):
         min_t = elements.get('MinT', '')
         max_t = elements.get('MaxT', '')
         ci = elements.get('CI', '')
-        
-        msg = f"🌤️【{target_city} 未來12小時預報】\n"
+
+        msg = f"【我是阿財!為您播報未來12小時氣象預報】\n"
+        msg = f"🌤️【{target_city} 天氣】\n"
         msg += f"• 天氣狀況：{wx}\n"
         msg += f"• 預估氣溫：{min_t}°C ~ {max_t}°C ({ci})\n"
         msg += f"• 降雨機率：{pop}%"
