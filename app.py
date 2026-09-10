@@ -105,7 +105,9 @@ def create_awei_profile_flex():
         {
             "type": "button",
             "action": {"type": "uri", "label": label, "uri": uri},
-            "style": "secondary",
+            # "primary" renders the label in white; "secondary" renders it
+            # dark, which is unreadable on this slate background.
+            "style": "primary",
             "height": "sm",
             "color": "#334155",
         }
