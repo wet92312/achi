@@ -284,7 +284,7 @@ def create_ah_tsai_menu_flex():
                                         "label": "台北天氣",
                                         "text": "台北天氣"
                                     },
-                                    "style": "secondary",
+                                    "style": "primary",
                                     "height": "sm",
                                     "color": "#334155"
                                 },
@@ -295,7 +295,7 @@ def create_ah_tsai_menu_flex():
                                         "label": "台中天氣",
                                         "text": "台中天氣"
                                     },
-                                    "style": "secondary",
+                                    "style": "primary",
                                     "height": "sm",
                                     "color": "#334155"
                                 },
@@ -306,7 +306,7 @@ def create_ah_tsai_menu_flex():
                                         "label": "高雄天氣",
                                         "text": "高雄天氣"
                                     },
-                                    "style": "secondary",
+                                    "style": "primary",
                                     "height": "sm",
                                     "color": "#334155"
                                 }
