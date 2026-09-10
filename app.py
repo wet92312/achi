@@ -1,5 +1,9 @@
 import os
 import requests
+import urllib3  # 新增：用於關閉 SSL 警告
+
+# 關閉 urllib3 產生的 SSL 警告訊息（讓 Render Logs 保持乾淨）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
@@ -46,42 +50,35 @@ CITY_MAPPING = {
 }
 
 def get_taiwan_weather(city_input):
-    """呼叫中央氣象署 API 取得預報（修正中文網址編碼與詳細 Log）"""
+    """呼叫中央氣象署 API 取得預報（新增 verify=False 忽略 SSL 驗證）"""
     if not CWA_API_KEY:
         print("❌ 錯誤: 未設定 CWA_API_KEY 環境變數")
         return "系統未設定氣象 API 金鑰。"
 
-    # 1. 縣市名稱轉換
     target_city = CITY_MAPPING.get(city_input)
     if not target_city:
         return None
 
-    # 2. API 請求網址與參數（使用 params 自動處理解析中文編碼）
     url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001"
     params = {
-        "Authorization": CWA_API_KEY.strip(),  # 自動去除前後空格
+        "Authorization": CWA_API_KEY.strip(),
         "locationName": target_city
     }
     
     try:
-        res = requests.get(url, params=params, timeout=8)
-        print(f"DEBUG - API HTTP Status: {res.status_code}") # 印出 HTTP 狀態碼
+        # 🔥 在此處加入 verify=False 繞過憑證問題
+        res = requests.get(url, params=params, timeout=8, verify=False)
         
         if res.status_code != 200:
             print(f"❌ API 請求失敗，狀態碼: {res.status_code}, 回覆: {res.text}")
             return f"氣象 API 連線失敗 (HTTP {res.status_code})"
 
         data = res.json()
-        
-        # 檢查是否有資料
         locations = data.get('records', {}).get('location', [])
         if not locations:
-            print("❌ 錯誤: 氣象署回傳資料中沒有找到地點")
             return "查無該縣市氣象資料。"
 
         location_data = locations[0]
-        
-        # 解析氣象要素
         elements = {
             item['elementName']: item['time'][0]['parameter']['parameterName'] 
             for item in location_data.get('weatherElement', [])
@@ -100,7 +97,7 @@ def get_taiwan_weather(city_input):
         return msg
 
     except Exception as e:
-        print(f"❌ Exception 錯誤詳細資訊: {e}") # 印出真正的錯誤訊息到 Render Logs
+        print(f"❌ Exception 錯誤詳細資訊: {e}")
         return "無法取得氣象資料，請稍後再試。"
 
 @app.route("/callback", methods=['POST'])
