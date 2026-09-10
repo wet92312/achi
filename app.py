@@ -463,7 +463,9 @@ def handle_message(event):
         if weather_flex:
             reply_messages.append(weather_flex)
         else:
-            reply_messages.append(create_ah_tsai_menu_flex())
+            reply_messages.append(
+                TextMessage(text="抱歉，阿財找不到這個縣市～\n請輸入「縣市+天氣」（如：台北天氣），或輸入「選單」查看功能列表喔！")
+            )
 
     if not reply_messages:
         return
