@@ -66,8 +66,140 @@ def get_weather_icon(wx_text):
         return "☀️"
     return "🌤️"
 
+def create_ah_tsai_menu_flex():
+    flex_json = {
+        "type": "bubble",
+        "styles": {
+            "body": {
+                "backgroundColor": "#1E293B"
+            }
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
+            "paddingAll": "lg",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "🤖 我是阿財！現在為您服務",
+                    "weight": "bold",
+                    "size": "xs",
+                    "color": "#38BDF8"
+                },
+                {
+                    "type": "text",
+                    "text": "阿財服務功能選單",
+                    "weight": "bold",
+                    "size": "xl",
+                    "color": "#FFFFFF",
+                    "margin": "xs"
+                },
+                {
+                    "type": "separator",
+                    "margin": "lg",
+                    "color": "#334155"
+                },
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "margin": "lg",
+                    "spacing": "xs",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "🌦️ 全台縣市即時氣象",
+                            "weight": "bold",
+                            "size": "sm",
+                            "color": "#F8FAFC"
+                        },
+                        {
+                            "type": "text",
+                            "text": "輸入「縣市名稱 + 天氣」，阿財為您提供 12 小時氣象、降雨機率與穿搭建議！",
+                            "size": "xs",
+                            "color": "#94A3B8",
+                            "wrap": True
+                        },
+                        {
+                            "type": "text",
+                            "text": "💡 示範：台北天氣、宜蘭氣象、高雄",
+                            "size": "xs",
+                            "color": "#38BDF8",
+                            "margin": "xs"
+                        }
+                    ]
+                },
+                {
+                    "type": "separator",
+                    "margin": "lg",
+                    "color": "#334155"
+                },
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "margin": "lg",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "⚡ 快速點擊測試：",
+                            "size": "xs",
+                            "color": "#CBD5E1",
+                            "weight": "bold"
+                        },
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "spacing": "sm",
+                            "contents": [
+                                {
+                                    "type": "button",
+                                    "action": {
+                                        "type": "message",
+                                        "label": "台北天氣",
+                                        "text": "台北天氣"
+                                    },
+                                    "style": "secondary",
+                                    "height": "sm",
+                                    "color": "#334155"
+                                },
+                                {
+                                    "type": "button",
+                                    "action": {
+                                        "type": "message",
+                                        "label": "台中天氣",
+                                        "text": "台中天氣"
+                                    },
+                                    "style": "secondary",
+                                    "height": "sm",
+                                    "color": "#334155"
+                                },
+                                {
+                                    "type": "button",
+                                    "action": {
+                                        "type": "message",
+                                        "label": "高雄天氣",
+                                        "text": "高雄天氣"
+                                    },
+                                    "style": "secondary",
+                                    "height": "sm",
+                                    "color": "#334155"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    
+    flex_container = FlexContainer.from_dict(flex_json)
+    return FlexMessage(
+        alt_text="🤖 阿財服務功能選單",
+        contents=flex_container
+    )
+
 def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
-    # 數值防呆與轉字串
     target_city = str(target_city or "未知縣市")
     wx = str(wx or "未知")
     min_t = str(min_t or "0")
@@ -104,7 +236,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
             "spacing": "md",
             "paddingAll": "lg",
             "contents": [
-                # 📢 最前面加入：阿財播報員開場白
                 {
                     "type": "text",
                     "text": "🎙️ 我是阿財，現在為您播報氣象～",
@@ -112,7 +243,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
                     "color": "#38BDF8",
                     "weight": "bold"
                 },
-                # 城市名稱
                 {
                     "type": "text",
                     "text": target_city,
@@ -322,13 +452,18 @@ def handle_message(event):
     user_message = event.message.text.strip().lower()
     reply_messages = []
 
-    cleaned_msg = user_message.replace("天氣", "").replace("氣象", "").strip()
-    weather_flex = get_taiwan_weather(cleaned_msg)
-    
-    if weather_flex:
-        reply_messages.append(weather_flex)
-    elif user_message == "hello":
-        reply_messages.append(TextMessage(text="你好！請輸入縣市名稱（例如：台北天氣、高雄天氣）即可獲得極簡風氣象卡片喔！"))
+    menu_keywords = ["選單", "功能", "幫助", "help", "menu", "指令", "阿財", "hello", "hi"]
+
+    if user_message in menu_keywords:
+        reply_messages.append(create_ah_tsai_menu_flex())
+    else:
+        cleaned_msg = user_message.replace("天氣", "").replace("氣象", "").strip()
+        weather_flex = get_taiwan_weather(cleaned_msg)
+        
+        if weather_flex:
+            reply_messages.append(weather_flex)
+        else:
+            reply_messages.append(create_ah_tsai_menu_flex())
 
     if not reply_messages:
         return
