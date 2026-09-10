@@ -1,4 +1,5 @@
 import os
+import requests
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
@@ -7,80 +8,112 @@ from linebot.v3.messaging import (
     ApiClient,
     MessagingApi,
     ReplyMessageRequest,
-    TextMessage,
-    ImageMessage  # 1. 新增匯入 ImageMessage
+    TextMessage
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 
 app = Flask(__name__)
 
-# 填入你的 Token 與 Secret
-CHANNEL_ACCESS_TOKEN = 'g49CdDG9Ww3jZ7+E0VpI4eqfJ6dEsTNHk4haEkuXPKGtKzUzosUq51V48qoi5pXZFZyXnXn6zTlVYGTsWteX4Lg6/ri75Up3J2zkYfGEj16SCJpQjHNotR1i7D7w2dFAuC/TxvkNFtk95MHcI8hxYgdB04t89/1O/w1cDnyilFU='
-CHANNEL_SECRET = '42832156485a47b6b5d392221bd7c672'
+CHANNEL_ACCESS_TOKEN = os.environ.get('CHANNEL_ACCESS_TOKEN')
+CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET')
+CWA_API_KEY = os.environ.get('CWA_API_KEY')  # 氣象署 API Key
 
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
+
+# 台灣縣市名稱常用對照表
+CITY_MAPPING = {
+    "台北": "臺北市", "臺北": "臺北市", "台北市": "臺北市", "臺北市": "臺北市",
+    "新北": "新北市", "新北市": "新北市",
+    "基隆": "基隆市", "基隆市": "基隆市",
+    "桃園": "桃園市", "桃園市": "桃園市",
+    "新竹": "新竹市", "新竹市": "新竹市", "新竹縣": "新竹縣",
+    "苗栗": "苗栗縣", "苗栗縣": "苗栗縣",
+    "台中": "臺中市", "臺中": "臺中市", "台中市": "臺中市", "臺中市": "臺中市",
+    "彰化": "彰化縣", "彰化縣": "彰化縣",
+    "南投": "南投縣", "南投縣": "南投縣",
+    "雲林": "雲林縣", "雲林縣": "雲林縣",
+    "嘉義": "嘉義市", "嘉義市": "嘉義市", "嘉義縣": "嘉義縣",
+    "台南": "臺南市", "臺南": "臺南市", "台南市": "臺南市", "臺南市": "臺南市",
+    "高雄": "高雄市", "高雄市": "高雄市",
+    "屏東": "屏東縣", "屏東縣": "屏東縣",
+    "宜蘭": "宜蘭縣", "宜蘭縣": "宜蘭縣",
+    "花蓮": "花蓮縣", "花蓮縣": "花蓮縣",
+    "台東": "臺東縣", "臺東": "臺東縣", "台東縣": "臺東縣", "臺東縣": "臺東縣",
+    "澎湖": "澎湖縣", "澎湖縣": "澎湖縣",
+    "金門": "金門縣", "金門縣": "金門縣",
+    "馬祖": "連江縣", "連江": "連江縣"
+}
+
+def get_taiwan_weather(city_input):
+    """呼叫中央氣象署 API 取得預報"""
+    if not CWA_API_KEY:
+        return "系統未設定氣象 API 金鑰。"
+
+    # 比對縣市名稱
+    target_city = CITY_MAPPING.get(city_input)
+    if not target_city:
+        return None
+
+    url = f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization={CWA_API_KEY}&locationName={target_city}"
+    
+    try:
+        res = requests.get(url, timeout=5)
+        data = res.json()
+        location_data = data['records']['location'][0]
+        
+        # 解析氣象要素（天氣現象、降雨機率、高低溫、舒適度）
+        elements = {item['elementName']: item['time'][0]['parameter']['parameterName'] for item in location_data['weatherElement']}
+        
+        wx = elements.get('Wx', '未知')
+        pop = elements.get('PoP', '0')
+        min_t = elements.get('MinT', '')
+        max_t = elements.get('MaxT', '')
+        ci = elements.get('CI', '')
+        
+        msg = f"🌤️【{target_city} 未來12小時預報】\n"
+        msg += f"• 天氣狀況：{wx}\n"
+        msg += f"• 預估氣溫：{min_t}°C ~ {max_t}°C ({ci})\n"
+        msg += f"• 降雨機率：{pop}%"
+        return msg
+    except Exception as e:
+        return "無法取得氣象資料，請稍後再試。"
 
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
     body = request.get_data(as_text=True)
-
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
-
     return 'OK'
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    # .strip() 去除前後空格，.lower() 將英文一律轉為小寫
     user_message = event.message.text.strip().lower()
-    reply_messages = []
+    reply_text = None
 
-    # 範例 1：純文字回應
-    if user_message == "你好":
-        reply_messages.append(TextMessage(text="你好我是阿財！很高興為您服務。"))
+    # 1. 判斷是否為天氣查詢（例如輸入：台北天氣、天氣 台北、高雄天氣）
+    cleaned_msg = user_message.replace("天氣", "").replace("氣象", "").strip()
+    weather_result = get_taiwan_weather(cleaned_msg)
+    
+    if weather_result:
+        reply_text = weather_result
+    # 2. 一般關鍵字判斷
+    elif user_message == "hello":
+        reply_text = "你好！發送縣市名稱（如：台北天氣）可查詢最新氣象喔！"
 
-    # 範例 4：純文字 + 超連結網址
-    elif user_message == "lcw":
-        reply_messages.append(
-            TextMessage(text="歡迎造訪我們的LCW官方網站：\nhttps://aweidesign.why3s.tw/lcwmade/index.html")
-        )
-
-    # 範例 2：單獨回應圖片
-    elif user_message == "菜單":
-        menu_img_url = "https://example.com/menu.jpg"  # 替換為你的公開圖片網址
-        reply_messages.append(
-            ImageMessage(
-                original_content_url=menu_img_url,  # 點開看的原圖
-                preview_image_url=menu_img_url       # 聊天室顯示的縮圖
-            )
-        )
-
-    # 範例 3：同時回應「文字 + 圖片」
-    elif user_message == "優惠":
-        promo_img_url = "https://example.com/promo.jpg"
-        reply_messages.append(TextMessage(text="這是我們本月最新的優惠活動："))
-        reply_messages.append(
-            ImageMessage(
-                original_content_url=promo_img_url,
-                preview_image_url=promo_img_url
-            )
-        )
-
-    # 沒命中任何關鍵字，直接 return 不回覆
-    if not reply_messages:
+    # 沒命中關鍵字或無氣象資料時不回覆
+    if not reply_text:
         return
 
-    # 發送訊息
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=reply_messages
+                messages=[TextMessage(text=reply_text)]
             )
         )
 
