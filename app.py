@@ -393,7 +393,7 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
 
 def get_taiwan_weather(city_input):
     if not CWA_API_KEY:
-        return TextMessage(text="系統未設定氣象 API 金鑰。")
+        return None
 
     target_city = CITY_MAPPING.get(city_input)
     if not target_city:
@@ -408,12 +408,12 @@ def get_taiwan_weather(city_input):
     try:
         res = requests.get(url, params=params, timeout=8, verify=False)
         if res.status_code != 200:
-            return TextMessage(text=f"氣象 API 連線失敗 (HTTP {res.status_code})")
+            return None
 
         data = res.json()
         locations = data.get('records', {}).get('location', [])
         if not locations:
-            return TextMessage(text="查無該縣市氣象資料。")
+            return None
 
         location_data = locations[0]
         
@@ -435,7 +435,7 @@ def get_taiwan_weather(city_input):
 
     except Exception as e:
         print(f"❌ Exception Detail:\n{traceback.format_exc()}")
-        return TextMessage(text="無法取得氣象資料，請稍後再試。")
+        return None
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -462,10 +462,6 @@ def handle_message(event):
         
         if weather_flex:
             reply_messages.append(weather_flex)
-        else:
-            reply_messages.append(
-                TextMessage(text="抱歉，阿財找不到這個縣市～\n請輸入「縣市+天氣」（如：台北天氣），或輸入「選單」查看功能列表喔！")
-            )
 
     if not reply_messages:
         return
