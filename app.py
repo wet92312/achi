@@ -78,6 +78,102 @@ def wants_menu(text):
     words = re.findall(r"[a-z]+", text)
     return any(word in words for word in MENU_KEYWORDS_ASCII)
 
+# 阿威 個人介紹關鍵字
+AWEI_KEYWORDS_CJK = ["阿威", "威哥"]
+AWEI_KEYWORDS_ASCII = ["wei", "awei"]
+
+AWEI_LINKS = [
+    ("Pinkoi 賣場", "https://www.pinkoi.com/store/lcwmade"),
+    ("Instagram", "https://www.instagram.com/lcw_made/"),
+    ("作品官網", "https://aweidesign.why3s.tw/lcwmade/index.html"),
+    ("Facebook", "https://www.facebook.com/aweidesignshow/"),
+]
+
+def wants_awei(text):
+    """True if the message is asking about 阿威.
+
+    Same split as wants_menu: CJK anywhere, ASCII whole words only so
+    "wei" does not fire on "weight".
+    """
+    if any(word in text for word in AWEI_KEYWORDS_CJK):
+        return True
+    words = re.findall(r"[a-z]+", text)
+    return any(word in words for word in AWEI_KEYWORDS_ASCII)
+
+def create_awei_profile_flex():
+    link_buttons = [
+        {
+            "type": "button",
+            "action": {"type": "uri", "label": label, "uri": uri},
+            "style": "secondary",
+            "height": "sm",
+            "color": "#334155",
+        }
+        for label, uri in AWEI_LINKS
+    ]
+
+    flex_json = {
+        "type": "bubble",
+        "styles": {"body": {"backgroundColor": "#1E293B"}},
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
+            "paddingAll": "lg",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": "🧵 阿財來介紹一下",
+                    "weight": "bold",
+                    "size": "xs",
+                    "color": "#38BDF8",
+                },
+                {
+                    "type": "text",
+                    "text": "阿威 LCW Made",
+                    "weight": "bold",
+                    "size": "xl",
+                    "color": "#FFFFFF",
+                    "margin": "xs",
+                },
+                {"type": "separator", "margin": "lg", "color": "#334155"},
+                {
+                    "type": "text",
+                    "text": "阿威是手工皮雕職人，本人也長得蠻帥的，皮件全手工打造，還可以客製唷！",
+                    "size": "sm",
+                    "color": "#F8FAFC",
+                    "wrap": True,
+                    "margin": "lg",
+                },
+                {"type": "separator", "margin": "lg", "color": "#334155"},
+                {
+                    "type": "box",
+                    "layout": "vertical",
+                    "margin": "lg",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "🔗 這裡找得到他",
+                            "size": "xs",
+                            "color": "#CBD5E1",
+                            "weight": "bold",
+                        },
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "spacing": "xs",
+                            "contents": link_buttons,
+                        },
+                    ],
+                },
+            ],
+        },
+    }
+
+    flex_container = FlexContainer.from_dict(flex_json)
+    return FlexMessage(alt_text="🧵 阿威 LCW Made 手工皮件", contents=flex_container)
+
 def get_weather_icon(wx_text):
     if not wx_text:
         return "🌤️"
@@ -481,15 +577,19 @@ def handle_message(event):
     user_message = event.message.text.strip().lower()
     reply_messages = []
 
-    # A city named anywhere in the message wins, so "阿財 台北天氣怎樣" asks for
-    # weather rather than the menu.
-    city = find_city(user_message)
-    if city:
-        weather_flex = get_taiwan_weather(city)
-        if weather_flex:
-            reply_messages.append(weather_flex)
-    elif wants_menu(user_message):
-        reply_messages.append(create_ah_tsai_menu_flex())
+    # Priority: 阿威 by name, then a city named anywhere in the message, then
+    # the menu. Exclusive, so "阿財 台北天氣怎樣" asks for weather rather than
+    # the menu, and "阿威 選單" does not send two cards.
+    if wants_awei(user_message):
+        reply_messages.append(create_awei_profile_flex())
+    else:
+        city = find_city(user_message)
+        if city:
+            weather_flex = get_taiwan_weather(city)
+            if weather_flex:
+                reply_messages.append(weather_flex)
+        elif wants_menu(user_message):
+            reply_messages.append(create_ah_tsai_menu_flex())
 
     if not reply_messages:
         return
