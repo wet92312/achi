@@ -1,6 +1,7 @@
 import os
 import requests
 import urllib3
+import traceback
 from flask import Flask, request, abort
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
@@ -66,7 +67,7 @@ def get_weather_icon(wx_text):
     return "🌤️"
 
 def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
-    # 1. 防錯過濾：確保傳入的所有值均非 None
+    # 數值防呆與轉字串
     target_city = str(target_city or "未知縣市")
     wx = str(wx or "未知")
     min_t = str(min_t or "0")
@@ -76,7 +77,6 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
 
     icon = get_weather_icon(wx)
     
-    # 2. 安全轉為整數
     try:
         pop_num = int(pop)
     except (ValueError, TypeError):
@@ -102,7 +102,7 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
             "type": "box",
             "layout": "vertical",
             "spacing": "md",
-            "paddingAll": "20px",
+            "paddingAll": "lg",
             "contents": [
                 {
                     "type": "text",
@@ -217,7 +217,8 @@ def create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci):
                                     "backgroundColor": "#38BDF8",
                                     "height": "8px",
                                     "width": pop_percent,
-                                    "cornerRadius": "4px"
+                                    "cornerRadius": "4px",
+                                    "contents": []  # 修正重點：必須加上空的 contents 陣列
                                 }
                             ]
                         }
@@ -276,7 +277,6 @@ def get_taiwan_weather(city_input):
 
         location_data = locations[0]
         
-        # 安全解析氣象要素，防止 API 回傳 null 時滲透入字典
         elements = {}
         for item in location_data.get('weatherElement', []):
             e_name = item.get('elementName')
@@ -294,7 +294,7 @@ def get_taiwan_weather(city_input):
         return create_apple_weather_flex(target_city, wx, min_t, max_t, pop, ci)
 
     except Exception as e:
-        print(f"❌ Exception: {e}")
+        print(f"❌ Exception Detail:\n{traceback.format_exc()}")
         return TextMessage(text="無法取得氣象資料，請稍後再試。")
 
 @app.route("/callback", methods=['POST'])
